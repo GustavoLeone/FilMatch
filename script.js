@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function () {
         joinSessionForm.classList.add('hidden');
         createSession(sessionCode); // Crea una sessione su Firebase
         fetchMovies(); // Carica i film all'inizio della sessione
+        listenToSessionUpdates(); // Aggiungi il listener per aggiornamenti in tempo reale
     });
 
     joinSessionBtn.addEventListener('click', () => {
@@ -70,9 +71,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const sessionRef = doc(db, "sessions", sessionCode);
             await setDoc(sessionRef, {
                 sessionCode: sessionCode,
-                participants: [sessionCode],
+                participants: [],
                 currentFilm: '',
-                matchFound: false
+                matchFound: false,
+                votes: [], // Array per voti in tempo reale
             });
         } catch (error) {
             console.error("Errore durante la creazione della sessione: ", error);
@@ -90,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 sessionContainer.classList.remove('hidden');
                 joinSessionForm.classList.add('hidden');
                 updateSessionParticipants(code);
-                fetchMovies(); // Carica i film per la sessione
+                listenToSessionUpdates(); // Aggiungi il listener per aggiornamenti in tempo reale
             } else {
                 alert('Sessione non esistente');
             }
@@ -104,6 +106,28 @@ document.addEventListener('DOMContentLoaded', function () {
         const sessionRef = doc(db, "sessions", code);
         await updateDoc(sessionRef, {
             participants: arrayUnion(sessionCode)
+        });
+    }
+
+    // Listener per aggiornamenti in tempo reale sulla sessione
+    function listenToSessionUpdates() {
+        const sessionRef = doc(db, "sessions", sessionCode);
+
+        onSnapshot(sessionRef, (snapshot) => {
+            const sessionData = snapshot.data();
+            if (sessionData) {
+                if (sessionData.currentFilm !== currentMovie?.title) {
+                    // Aggiorna il film corrente
+                    currentMovie = { title: sessionData.currentFilm };
+                    movieContainer.innerHTML = `<h3>${currentMovie.title}</h3>`;
+                }
+
+                if (sessionData.matchFound) {
+                    // Mostra il match
+                    matchResult.classList.remove('hidden');
+                    matchMovie.textContent = `Match! Film: ${currentMovie.title}`;
+                }
+            }
         });
     }
 
@@ -141,30 +165,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Funzione per gestire la votazione
-    function handleVote(vote) {
-        userVotes.push(vote);
-
-        if (userVotes.length === 2) { // Quando entrambi i partecipanti hanno votato
-            checkMatch();
-        } else {
-            loadNextMovie(); // Carica il prossimo film se solo uno ha votato
-        }
-    }
-
-    // Funzione per verificare se c'è un match
-    async function checkMatch() {
+    async function handleVote(vote) {
         const sessionRef = doc(db, "sessions", sessionCode);
-        const sessionSnapshot = await getDoc(sessionRef);
-
-        if (userVotes[0] === 'like' && userVotes[1] === 'like') {
-            matchResult.classList.remove('hidden');
-            matchMovie.innerHTML = `Match! Film: ${currentMovie.title}`;
-            await updateDoc(sessionRef, {
-                matchFound: true
-            });
-        } else {
-            userVotes = []; // Reset voti
-            loadNextMovie();
-        }
+        await updateDoc(sessionRef, {
+            votes: arrayUnion(vote)
+        });
     }
 });
