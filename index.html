@@ -40,10 +40,29 @@
     </div>
   </div>
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-firestore.js"></script>
+  <script type="module" src="script.js"></script>
+
+  <script type="module">
+
+  import { initializeApp } from "firebase/app";
+  import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+
+    // Configurazione Firebase
+const firebaseConfig = {
+    apiKey: "AIzaSyDj9mfcLOxKIpTFrsSwA-Al1xtT8rAQuIU",
+    authDomain: "gu-filmatch.firebaseapp.com",
+    projectId: "gu-filmatch",
+    storageBucket: "gu-filmatch.firebasestorage.app",
+    messagingSenderId: "102030937017",
+    appId: "1:102030937017:web:1dc8161573d755c8bfc468",
+    measurementId: "G-Z4GP6SXJ88"
+};
+
+// Inizializzazione di Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+</script>
   
-  <script src="script.js"></script>
 </body>
 </html>
