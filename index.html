@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Match Movies</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <h1>Match Movies</h1>
+
+    <!-- Pulsanti iniziali -->
+    <div id="start-buttons">
+      <button id="join-session-btn">Partecipa a sessione già esistente</button>
+      <button id="start-session-btn">Avvia sessione</button>
+    </div>
+
+    <!-- Form per partecipare a sessione esistente -->
+    <div id="join-session-form" class="hidden">
+      <label for="session-code">Codice sessione:</label>
+      <input type="text" id="session-code" placeholder="Inserisci codice sessione">
+      <button id="join-session">Unisciti alla sessione</button>
+    </div>
+
+    <!-- Sessione in corso -->
+    <div id="session" class="hidden">
+      <button id="close-session-btn" class="close-btn">X</button>
+      <h2>Sessione Avviata!</h2>
+      <p>Codice sessione: <span id="session-code-display"></span></p>
+      <div id="movie-container"></div>
+      <div id="movie-buttons">
+        <button id="like-btn">Mi piace</button>
+        <button id="dislike-btn">Non mi piace</button>
+      </div>
+      <div id="match-result" class="hidden">
+        <h3>Match trovato!</h3>
+        <div id="match-movie"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-firestore.js"></script>
+  
+  <script src="script.js"></script>
+</body>
+</html>
