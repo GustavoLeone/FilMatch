@@ -22,7 +22,8 @@ document.addEventListener('DOMContentLoaded', function () {
         currentMovie: null,
         movieList: [],
         movieIndex: 0,
-        unsubscribe: null // Per gestire l'unsubscribe dal listener di Firestore
+        unsubscribe: null,
+        MOVIES_PER_SESSION: 50 // Numero di film per sessione
     };
 
     // Genera un ID utente unico
@@ -35,6 +36,14 @@ document.addEventListener('DOMContentLoaded', function () {
     elements.likeBtn.addEventListener('click', () => handleVote('like'));
     elements.dislikeBtn.addEventListener('click', () => handleVote('dislike'));
     elements.closeSessionBtn.addEventListener('click', handleCloseSession);
+
+    // Aggiungiamo un ascoltatore per chiudere il popup del match
+    elements.matchResult.addEventListener('click', (e) => {
+        if (e.target === elements.matchResult) {
+            hideElement(elements.matchResult);
+            resetToInitialState();
+        }
+    });
 
     // Session Management Functions
     async function handleStartSession() {
@@ -101,7 +110,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 currentFilm: '',
                 matchFound: false,
                 votes: {},
-                currentMovieIndex: 0
+                currentMovieIndex: 0,
+                selectedMovies: [] // Array per memorizzare l'ordine dei film selezionati
             });
         } catch (error) {
             console.error("Errore durante la creazione della sessione:", error);
@@ -127,7 +137,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 participants: firebase.firestore.FieldValue.arrayUnion(userID)
             });
             
-            await fetchMovies();
+            // Carica i film solo se non sono già stati selezionati
+            const sessionData = sessionDoc.data();
+            if (sessionData.selectedMovies && sessionData.selectedMovies.length > 0) {
+                state.movieList = sessionData.selectedMovies;
+                loadNextMovie(sessionData.currentMovieIndex || 0);
+            } else {
+                await fetchMovies();
+            }
         } catch (error) {
             console.error("Errore durante l'accesso alla sessione:", error);
             throw error;
@@ -164,8 +181,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Verifica se tutti i partecipanti hanno votato "like"
                 if (allVotes.length === participants.length) {
                     if (allVotes.every(vote => vote === "like")) {
-                        showElement(elements.matchResult);
-                        elements.matchMovie.innerHTML = `Match! Film: ${state.currentMovie.title}`;
+                        showMatchResult(state.currentMovie);
                         await doc.ref.update({ 
                             matchFound: true,
                             votes: {} 
@@ -185,9 +201,28 @@ document.addEventListener('DOMContentLoaded', function () {
     // Movie Management Functions
     async function fetchMovies() {
         try {
-            const response = await fetch('https://api.themoviedb.org/3/movie/popular?api_key=1c84fb676472691c9a5b4301014231ec');
-            const data = await response.json();
-            state.movieList = data.results;
+            // Richiediamo più pagine di film
+            const moviePages = await Promise.all([
+                fetch('https://api.themoviedb.org/3/movie/popular?api_key=1c84fb676472691c9a5b4301014231ec&page=1'),
+                fetch('https://api.themoviedb.org/3/movie/popular?api_key=1c84fb676472691c9a5b4301014231ec&page=2'),
+                fetch('https://api.themoviedb.org/3/movie/popular?api_key=1c84fb676472691c9a5b4301014231ec&page=3'),
+                fetch('https://api.themoviedb.org/3/movie/popular?api_key=1c84fb676472691c9a5b4301014231ec&page=4')
+            ]);
+
+            const results = await Promise.all(moviePages.map(response => response.json()));
+            
+            // Combina tutti i film in un unico array
+            const allMovies = results.reduce((acc, curr) => [...acc, ...curr.results], []);
+            
+            // Seleziona casualmente MOVIES_PER_SESSION film
+            const selectedMovies = shuffleArray(allMovies).slice(0, state.MOVIES_PER_SESSION);
+            
+            // Salva i film selezionati nel database
+            await db.collection("sessions").doc(state.sessionCode).update({
+                selectedMovies: selectedMovies
+            });
+
+            state.movieList = selectedMovies;
             loadNextMovie(0);
         } catch (error) {
             console.error('Errore nel caricamento dei film:', error);
@@ -210,7 +245,44 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function showMatchResult(movie) {
+        elements.matchResult.innerHTML = `
+            <div class="match-content">
+                <div style="position: relative;">
+                    <button class="close-match-btn" style="position: absolute; top: -10px; right: -10px; background: none; border: none; color: white; cursor: pointer; font-size: 24px;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <h3><i class="fas fa-star"></i> Match Trovato! <i class="fas fa-star"></i></h3>
+                    <div id="match-movie">
+                        <img src="https://image.tmdb.org/t/p/w300${movie.poster_path}" 
+                             alt="${movie.title}"
+                             style="max-width: 200px; border-radius: 8px; margin: 10px 0;">
+                        <h4>${movie.title}</h4>
+                        <p>${movie.overview}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        showElement(elements.matchResult);
+        
+        // Aggiungi event listener per il pulsante di chiusura
+        const closeBtn = elements.matchResult.querySelector('.close-match-btn');
+        closeBtn.addEventListener('click', () => {
+            hideElement(elements.matchResult);
+            resetToInitialState();
+        });
+    }
+
     // Utility Functions
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
     function generateSessionCode() {
         return Math.random().toString(36).substring(2, 8).toUpperCase();
     }
@@ -251,5 +323,11 @@ document.addEventListener('DOMContentLoaded', function () {
             state.unsubscribe();
             state.unsubscribe = null;
         }
+    }
+
+    function resetToInitialState() {
+        hideElement(elements.sessionContainer);
+        showElement(elements.joinSessionForm);
+        resetState();
     }
 });
