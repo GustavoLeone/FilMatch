@@ -1,174 +1,258 @@
+console.log('Script caricato');
+// Unique ID generator for users
+const userID = Math.random().toString(36).substring(2, 15);
+
 document.addEventListener('DOMContentLoaded', function () {
-    // Riferimenti ai pulsanti e contenitori
-    const joinSessionBtn = document.getElementById('join-session-btn');
-    const startSessionBtn = document.getElementById('start-session-btn');
-    const joinSessionForm = document.getElementById('join-session-form');
-    const sessionContainer = document.getElementById('session');
-    const sessionCodeDisplay = document.getElementById('session-code-display');
-    const movieContainer = document.getElementById('movie-container');
-    const likeBtn = document.getElementById('like-btn');
-    const dislikeBtn = document.getElementById('dislike-btn');
-    const matchResult = document.getElementById('match-result');
-    const matchMovie = document.getElementById('match-movie');
-    const closeSessionBtn = document.getElementById('close-session-btn');
+    // DOM Elements
+    const elements = {
+        joinSessionBtn: document.getElementById('join-session-btn'),
+        startSessionBtn: document.getElementById('start-session-btn'),
+        joinSessionForm: document.getElementById('join-session-form'),
+        sessionContainer: document.getElementById('session'),
+        sessionCodeDisplay: document.getElementById('session-code-display'),
+        movieContainer: document.getElementById('movie-container'),
+        likeBtn: document.getElementById('like-btn'),
+        dislikeBtn: document.getElementById('dislike-btn'),
+        matchResult: document.getElementById('match-result'),
+        matchMovie: document.getElementById('match-movie'),
+        closeSessionBtn: document.getElementById('close-session-btn'),
+        joinSessionSubmitBtn: document.getElementById('join-session'),
+        sessionCodeInput: document.getElementById('session-code')
+    };
 
-    let sessionCode = '';
-    let currentMovie = null;
-    let userVotes = [];
-    let movieList = [];
-    let movieIndex = 0;
+    // State management
+    const state = {
+        sessionCode: '',
+        currentMovie: null,
+        movieList: [],
+        movieIndex: 0
+    };
 
-    // Gestione pulsanti iniziali
-    startSessionBtn.addEventListener('click', () => {
-        sessionCode = generateSessionCode();
-        sessionCodeDisplay.textContent = sessionCode;
-        sessionContainer.classList.remove('hidden');
-        joinSessionForm.classList.add('hidden');
-        createSession(sessionCode); // Crea una sessione su Firebase
-        fetchMovies(); // Carica i film all'inizio della sessione
-        listenToSessionUpdates(); // Aggiungi il listener per aggiornamenti in tempo reale
-    });
+    // Event Listeners
+    elements.startSessionBtn.addEventListener('click', handleStartSession);
+    elements.joinSessionBtn.addEventListener('click', handleJoinSessionClick);
+    elements.joinSessionSubmitBtn.addEventListener('click', handleJoinSessionSubmit);
+    elements.likeBtn.addEventListener('click', () => handleVote('like'));
+    elements.dislikeBtn.addEventListener('click', () => handleVote('dislike'));
+    elements.closeSessionBtn.addEventListener('click', handleCloseSession);
 
-    joinSessionBtn.addEventListener('click', () => {
-        joinSessionForm.classList.remove('hidden');
-        sessionContainer.classList.add('hidden');
-    });
+    // Session Management Functions
+    async function handleStartSession() {
+        state.sessionCode = generateSessionCode();
+        elements.sessionCodeDisplay.textContent = state.sessionCode;
+        showElement(elements.sessionContainer);
+        hideElement(elements.joinSessionForm);
+        
+        try {
+            await createSession(state.sessionCode);
+            await fetchMovies();
+        } catch (error) {
+            showError('Errore durante l\'avvio della sessione');
+            console.error(error);
+        }
+    }
 
-    // Gestione del form per unirsi a una sessione
-    document.getElementById('join-session').addEventListener('click', () => {
-        const code = document.getElementById('session-code').value;
-        if (code === '') {
-            alert('Inserisci un codice di sessione.');
+    function handleJoinSessionClick() {
+        showElement(elements.joinSessionForm);
+        hideElement(elements.sessionContainer);
+    }
+
+    async function handleJoinSessionSubmit() {
+        const code = elements.sessionCodeInput.value.trim().toUpperCase();
+        if (!code) {
+            showError('Inserisci un codice di sessione valido');
             return;
         }
-        joinSession(code); // Unisciti alla sessione
-    });
+        await joinSession(code);
+    }
 
-    // Gestione dei pulsanti di like/dislike
-    likeBtn.addEventListener('click', () => {
-        handleVote('like');
-    });
+    async function handleVote(voteType) {
+        try {
+            await saveVote(userID, voteType);
+            await checkMatch();
+        } catch (error) {
+            showError('Errore durante il voto');
+            console.error(error);
+        }
+    }
 
-    dislikeBtn.addEventListener('click', () => {
-        handleVote('dislike');
-    });
+    function handleCloseSession() {
+        hideElement(elements.sessionContainer);
+        showElement(elements.joinSessionForm);
+        resetState();
+    }
 
-    // Gestione della chiusura della sessione
-    closeSessionBtn.addEventListener('click', () => {
-        sessionContainer.classList.add('hidden');
-        joinSessionForm.classList.remove('hidden');
-        userVotes = [];
-    });
+    // Firebase Functions
+    async function createSession(sessionCode) {
+        try {
+            await db.collection("sessions").doc(sessionCode).set({
+                sessionCode,
+                participants: [userID],
+                currentFilm: '',
+                matchFound: false,
+                votes: {}
+            });
+        } catch (error) {
+            console.error("Errore durante la creazione della sessione:", error);
+            throw error;
+        }
+    }
 
-    // Funzione per generare il codice sessione
+    async function joinSession(code) {
+        try {
+            const sessionDoc = await db.collection("sessions").doc(code).get();
+            
+            if (!sessionDoc.exists) {
+                showError("Sessione non trovata");
+                return;
+            }
+
+            state.sessionCode = code;
+            elements.sessionCodeDisplay.textContent = code;
+            showElement(elements.sessionContainer);
+            hideElement(elements.joinSessionForm);
+            
+            await db.collection("sessions").doc(code).update({
+                participants: firebase.firestore.FieldValue.arrayUnion(userID)
+            });
+            
+            await fetchMovies();
+        } catch (error) {
+            console.error("Errore durante l'accesso alla sessione:", error);
+            showError("Errore durante l'accesso alla sessione");
+        }
+    }
+
+    async function saveVote(userID, voteType) {
+        try {
+            const sessionRef = db.collection("sessions").doc(state.sessionCode);
+            const sessionDoc = await sessionRef.get();
+            
+            if (sessionDoc.exists) {
+                const votes = sessionDoc.data().votes || {};
+                votes[userID] = voteType;
+                await sessionRef.update({ votes });
+            }
+        } catch (error) {
+            console.error("Errore durante il salvataggio del voto:", error);
+            throw error;
+        }
+    }
+
+    async function checkMatch() {
+        try {
+            const sessionRef = db.collection("sessions").doc(state.sessionCode);
+            const sessionDoc = await sessionRef.get();
+            
+            if (sessionDoc.exists) {
+                const data = sessionDoc.data();
+                const votes = data.votes || {};
+                const participants = data.participants || [];
+                const allVotes = Object.values(votes);
+                
+                if (allVotes.length === participants.length && allVotes.every(vote => vote === "like")) {
+                    showElement(elements.matchResult);
+                    elements.matchMovie.innerHTML = `Match! Film: ${state.currentMovie.title}`;
+                    await sessionRef.update({ 
+                        matchFound: true,
+                        votes: {} // Reset votes after match
+                    });
+                } else if (allVotes.length === participants.length) {
+                    await sessionRef.update({ votes: {} }); // Reset votes
+                    loadNextMovie();
+                }
+            }
+        } catch (error) {
+            console.error("Errore durante la verifica del match:", error);
+            throw error;
+        }
+    }
+
+    // Movie Management Functions
+    async function fetchMovies() {
+        try {
+            const response = await fetch('https://api.themoviedb.org/3/movie/popular?api_key=1c84fb676472691c9a5b4301014231ec', {
+                headers: {
+                    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxYzg0ZmI2NzY0NzI2OTFjOWE1YjQzMDEwMTQyMzFlYyIsInN1YiI6IjY1OWVmYTBiOGRlMGFlMDE1OWI5NTc1YSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.fGZJvxS-wvgEeGH3DbLkUAEWJF5Zzb-2Bl9aVQQGLPw',
+                    'accept': 'application/json'
+                }
+            });
+            console.log('Risposta API:', response);
+            const data = await response.json();
+            console.log('Dati film:', data);
+            state.movieList = data.results;
+            state.movieIndex = 0;
+            loadNextMovie();
+        } catch (error) {
+            console.error('Errore nel caricamento dei film:', error);
+            showError('Errore nel caricamento dei film');
+        }
+    }
+
+    function loadNextMovie() {
+        if (state.movieIndex < state.movieList.length) {
+            state.currentMovie = state.movieList[state.movieIndex];
+            elements.movieContainer.innerHTML = `
+                <img src="https://image.tmdb.org/t/p/w300${state.currentMovie.poster_path}" 
+                     alt="${state.currentMovie.title}"
+                     style="max-width: 100%; border-radius: 8px;">
+                <h3>${state.currentMovie.title}</h3>
+                <p>${state.currentMovie.overview}</p>
+            `;
+            updateCurrentFilmInDB(state.currentMovie.title);
+            state.movieIndex++;
+        } else {
+            elements.movieContainer.innerHTML = '<p>Nessun altro film disponibile.</p>';
+        }
+    }
+
+    async function updateCurrentFilmInDB(movieTitle) {
+        try {
+            await db.collection("sessions").doc(state.sessionCode).update({
+                currentFilm: movieTitle
+            });
+        } catch (error) {
+            console.error('Errore nell\'aggiornamento del film corrente:', error);
+            showError('Errore nell\'aggiornamento del film');
+        }
+    }
+
+    // Utility Functions
     function generateSessionCode() {
         return Math.random().toString(36).substring(2, 8).toUpperCase();
     }
 
-    // Funzione per creare una nuova sessione su Firebase
-    async function createSession(sessionCode) {
-        try {
-            const sessionRef = doc(db, "sessions", sessionCode);
-            await setDoc(sessionRef, {
-                sessionCode: sessionCode,
-                participants: [],
-                currentFilm: '',
-                matchFound: false,
-                votes: [], // Array per voti in tempo reale
-            });
-        } catch (error) {
-            console.error("Errore durante la creazione della sessione: ", error);
-        }
+    function showError(message) {
+        const popup = document.createElement('div');
+        popup.textContent = message;
+        popup.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            background-color: #ff5252;
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+        `;
+        document.body.appendChild(popup);
+        setTimeout(() => popup.remove(), 2000);
     }
 
-    // Funzione per unirsi a una sessione esistente
-    async function joinSession(code) {
-        try {
-            const sessionRef = doc(db, "sessions", code);
-            const sessionSnapshot = await getDoc(sessionRef);
-            if (sessionSnapshot.exists()) {
-                sessionCode = code;
-                sessionCodeDisplay.textContent = sessionCode;
-                sessionContainer.classList.remove('hidden');
-                joinSessionForm.classList.add('hidden');
-                updateSessionParticipants(code);
-                listenToSessionUpdates(); // Aggiungi il listener per aggiornamenti in tempo reale
-            } else {
-                alert('Sessione non esistente');
-            }
-        } catch (error) {
-            console.error("Errore durante l'unione alla sessione: ", error);
-        }
+    function showElement(element) {
+        element.classList.remove('hidden');
     }
 
-    // Funzione per aggiornare la lista dei partecipanti in Firebase
-    async function updateSessionParticipants(code) {
-        const sessionRef = doc(db, "sessions", code);
-        await updateDoc(sessionRef, {
-            participants: arrayUnion(sessionCode)
-        });
+    function hideElement(element) {
+        element.classList.add('hidden');
     }
 
-    // Listener per aggiornamenti in tempo reale sulla sessione
-    function listenToSessionUpdates() {
-        const sessionRef = doc(db, "sessions", sessionCode);
-
-        onSnapshot(sessionRef, (snapshot) => {
-            const sessionData = snapshot.data();
-            if (sessionData) {
-                if (sessionData.currentFilm !== currentMovie?.title) {
-                    // Aggiorna il film corrente
-                    currentMovie = { title: sessionData.currentFilm };
-                    movieContainer.innerHTML = `<h3>${currentMovie.title}</h3>`;
-                }
-
-                if (sessionData.matchFound) {
-                    // Mostra il match
-                    matchResult.classList.remove('hidden');
-                    matchMovie.textContent = `Match! Film: ${currentMovie.title}`;
-                }
-            }
-        });
-    }
-
-    // Funzione per recuperare i film
-    function fetchMovies() {
-        fetch('https://api.themoviedb.org/3/movie/popular?api_key=1c84fb676472691c9a5b4301014231ec')
-            .then(response => response.json())
-            .then(data => {
-                movieList = data.results; // Salva la lista dei film
-                movieIndex = 0; // Resetta l'indice
-                loadNextMovie(); // Mostra il primo film
-            })
-            .catch(error => console.log('Errore nel recupero dei film:', error));
-    }
-
-    // Funzione per caricare il prossimo film
-    function loadNextMovie() {
-        if (movieIndex < movieList.length) {
-            currentMovie = movieList[movieIndex];
-            movieContainer.innerHTML = `<img src="https://image.tmdb.org/t/p/w200${currentMovie.poster_path}" alt="${currentMovie.title}">
-                                         <h3>${currentMovie.title}</h3>`;
-            updateCurrentFilmInDB(currentMovie.title);
-            movieIndex++;
-        } else {
-            movieContainer.innerHTML = '<p>Nessun altro film disponibile.</p>';
-        }
-    }
-
-    // Funzione per aggiornare il film attuale nel DB
-    async function updateCurrentFilmInDB(movieTitle) {
-        const sessionRef = doc(db, "sessions", sessionCode);
-        await updateDoc(sessionRef, {
-            currentFilm: movieTitle
-        });
-    }
-
-    // Funzione per gestire la votazione
-    async function handleVote(vote) {
-        const sessionRef = doc(db, "sessions", sessionCode);
-        await updateDoc(sessionRef, {
-            votes: arrayUnion(vote)
-        });
+    function resetState() {
+        state.sessionCode = '';
+        state.currentMovie = null;
+        state.movieList = [];
+        state.movieIndex = 0;
     }
 });
