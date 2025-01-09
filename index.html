@@ -1,68 +1,101 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Match Movies</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FilMatch - Trova il film perfetto insieme!</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-  <div id="app">
-    <h1>Match Movies</h1>
+    <div id="app">
+        <h1>FilMatch <i class="fas fa-film"></i></h1>
+        
+        <!-- Sezione iniziale -->
+        <div id="start-buttons">
+            <button id="start-session-btn" class="primary-btn">
+                <i class="fas fa-plus"></i> Crea Nuova Sessione
+            </button>
+            <button id="join-session-btn" class="secondary-btn">
+                <i class="fas fa-sign-in-alt"></i> Partecipa a Sessione
+            </button>
+        </div>
 
-    <!-- Pulsanti iniziali -->
-    <div id="start-buttons">
-      <button id="join-session-btn">Partecipa a sessione già esistente</button>
-      <button id="start-session-btn">Avvia sessione</button>
+        <!-- Form per unirsi -->
+        <div id="join-session-form" class="hidden">
+            <div class="form-container">
+                <h2>Unisciti alla Sessione</h2>
+                <div class="input-group">
+                    <input type="text" id="session-code" 
+                           placeholder="Inserisci il codice sessione"
+                           maxlength="6"
+                           autocomplete="off">
+                    <button id="join-session" class="primary-btn">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sessione attiva -->
+        <div id="session" class="hidden">
+            <div class="session-header">
+                <button id="close-session-btn" class="icon-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="session-info">
+                    <h2>Sessione Attiva</h2>
+                    <div class="code-display">
+                        Codice: <span id="session-code-display"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenitore film -->
+            <div id="movie-container">
+                <!-- Il contenuto verrà popolato dinamicamente -->
+            </div>
+
+            <!-- Controlli film -->
+            <div id="movie-buttons">
+                <button id="dislike-btn" class="vote-btn dislike">
+                    <i class="fas fa-times"></i>
+                </button>
+                <button id="like-btn" class="vote-btn like">
+                    <i class="fas fa-heart"></i>
+                </button>
+            </div>
+
+            <!-- Risultato match -->
+            <div id="match-result" class="hidden">
+                <div class="match-content">
+                    <h3><i class="fas fa-star"></i> Match Trovato! <i class="fas fa-star"></i></h3>
+                    <div id="match-movie"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Form per partecipare a sessione esistente -->
-    <div id="join-session-form" class="hidden">
-      <label for="session-code">Codice sessione:</label>
-      <input type="text" id="session-code" placeholder="Inserisci codice sessione">
-      <button id="join-session">Unisciti alla sessione</button>
-    </div>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDj9mfcLOxKIpTFrsSwA-Al1xtT8rAQuIU",
+            authDomain: "gu-filmatch.firebaseapp.com",
+            projectId: "gu-filmatch",
+            storageBucket: "gu-filmatch.firebasestorage.app",
+            messagingSenderId: "102030937017",
+            appId: "1:102030937017:web:1dc8161573d755c8bfc468",
+            measurementId: "G-Z4GP6SXJ88"
+        };
 
-    <!-- Sessione in corso -->
-    <div id="session" class="hidden">
-      <button id="close-session-btn" class="close-btn">X</button>
-      <h2>Sessione Avviata!</h2>
-      <p>Codice sessione: <span id="session-code-display"></span></p>
-      <div id="movie-container"></div>
-      <div id="movie-buttons">
-        <button id="like-btn">Mi piace</button>
-        <button id="dislike-btn">Non mi piace</button>
-      </div>
-      <div id="match-result" class="hidden">
-        <h3>Match trovato!</h3>
-        <div id="match-movie"></div>
-      </div>
-    </div>
-  </div>
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+    </script>
 
-  <script type="module" src="script.js"></script>
-
-  <script type="module">
-
-  import { initializeApp } from "firebase/app";
-  import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
-
-    // Configurazione Firebase
-const firebaseConfig = {
-    apiKey: "AIzaSyDj9mfcLOxKIpTFrsSwA-Al1xtT8rAQuIU",
-    authDomain: "gu-filmatch.firebaseapp.com",
-    projectId: "gu-filmatch",
-    storageBucket: "gu-filmatch.firebasestorage.app",
-    messagingSenderId: "102030937017",
-    appId: "1:102030937017:web:1dc8161573d755c8bfc468",
-    measurementId: "G-Z4GP6SXJ88"
-};
-
-// Inizializzazione di Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-</script>
-  
+    <script src="script.js"></script>
 </body>
 </html>
